@@ -8,6 +8,7 @@
 // @grant        GM_xmlhttpRequest
 // @connect      system.fgoupsk.ru
 // @noframes
+// @license     GPL V 0.3
 // ==/UserScript==
 
 (function () {
