@@ -68,7 +68,7 @@ https://system.fgoupsk.ru/student/?mode=ucheba&act=group&act2=prog*
 
 ## Автор
 
-**AbrikosV | Масеевская А.Д.**
+**AbrikosV**
 
 ---
 
