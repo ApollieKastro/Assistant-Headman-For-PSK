@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         SFH - Student Fair Hours + Skip Counter (Light/Dark)
-// @namespace    https://github.com/AbrikosV/Pskstyle/sfh
-// @version      3.6
-// @description  Массовое выставление и удаление прогулов + счётчик и календарь дня в плавающей панели. Синхронизация темы с PskStyle, память ввода, стоп/отмена.
-// @author       AbrikosV | Масеевская А.Д.
+// @name         AH- Assistant Headman
+// @namespace    https://github.com/ApollieKastro/Assistant-Headman-For-PSK 
+// // @version      3.6
+// @description  Скрипт который позваляет выставлять прогуллы массово, выборочно, по определенным фильтрам. значительно экномит время старостам
+// @author       AbrikosV 
 // @match        https://system.fgoupsk.ru/student/?mode=ucheba&act=group&act2=prog*
 // @grant        GM_xmlhttpRequest
 // @connect      system.fgoupsk.ru
