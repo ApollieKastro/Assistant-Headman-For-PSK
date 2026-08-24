@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AH- Assistant Headman
 // @namespace    https://github.com/ApollieKastro/Assistant-Headman-For-PSK 
-// // @version      3.6
+// @version      3.6
 // @description  Скрипт который позваляет выставлять прогуллы массово, выборочно, по определенным фильтрам. значительно экномит время старостам
 // @author       AbrikosV 
 // @match        https://system.fgoupsk.ru/student/?mode=ucheba&act=group&act2=prog*
