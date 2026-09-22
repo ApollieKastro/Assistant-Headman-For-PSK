@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         AH- Assistant Headman
-// @namespace    https://github.com/ApollieKastro/Assistant-Headman-For-PSK 
-// @version      3.6
+// @namespace    https://github.com/ApollieKastro/Assistant-Headman-For-PSK
+// @version      4.0
 // @description  Скрипт который позваляет выставлять прогуллы массово, выборочно, по определенным фильтрам. значительно экномит время старостам
-// @author       AbrikosV 
+// @author       AbrikosV
 // @match        https://system.fgoupsk.ru/student/?mode=ucheba&act=group&act2=prog*
 // @grant        GM_xmlhttpRequest
 // @connect      system.fgoupsk.ru
@@ -25,6 +25,8 @@
     const LS_LAST = 'sfh-last-inputs';
     const LS_COLLAPSED = 'sfh-collapsed';
     const LS_AUTORELOAD = 'sfh-autoreload';
+    const LS_MODE = 'sfh-mode';
+    const LS_RANGE_DATES = 'sfh-range-dates';
 
     const state = {
         running: false,
@@ -89,7 +91,12 @@
             statusSuccessBg: '#1b5e20',
             statusErrorBg: '#b71c1c',
             resultBg: '#1e3a5f',
-            resultText: '#bbdefb'
+            resultText: '#bbdefb',
+            tabBg: '#2a2d35',
+            tabActiveBg: '#2e7d32',
+            tabActiveColor: '#fff',
+            tabHoverBg: '#353840',
+            rangeBg: '#2a2d35'
         } : {
             bgPanel: 'rgba(255, 255, 255, .97)',
             borderPanel: '#4CAF50',
@@ -108,7 +115,12 @@
             statusSuccessBg: '#e8f5e9',
             statusErrorBg: '#ffebee',
             resultBg: '#e3f2fd',
-            resultText: '#1565c0'
+            resultText: '#1565c0',
+            tabBg: '#f0f0f0',
+            tabActiveBg: '#4CAF50',
+            tabActiveColor: '#fff',
+            tabHoverBg: '#e0e0e0',
+            rangeBg: '#f5f5f5'
         };
     }
 
@@ -271,6 +283,7 @@
 
         const collapsed = localStorage.getItem(LS_COLLAPSED) === 'true';
         const autoreload = localStorage.getItem(LS_AUTORELOAD) !== 'false';
+        const currentMode = localStorage.getItem(LS_MODE) || 'single';
         let last = {};
         try { last = JSON.parse(localStorage.getItem(LS_LAST) || '{}'); } catch (e) { }
 
@@ -312,18 +325,57 @@
             </div>
             <div id="sfh-counter" style="margin-bottom:${collapsed ? '0' : '10px'}; font-size:12px; font-weight:bold;"></div>
             <div id="sfh-body" style="display:${collapsed ? 'none' : 'block'};">
-                <div id="sfh-cal"></div>
+                <!-- Переключатель режимов -->
+                <div class="sfh-tabs" style="display:flex; gap:0; margin-bottom:12px; border-radius:7px; overflow:hidden; border:1px solid ${s.inputBorder};">
+                    <button type="button" class="sfh-tab" data-mode="single"
+                        style="flex:1; padding:7px 4px; border:none; cursor:pointer; font-size:12px; font-weight:bold; font-family:inherit; transition: background .15s, color .15s;">
+                        📅 Один день
+                    </button>
+                    <button type="button" class="sfh-tab" data-mode="multi"
+                        style="flex:1; padding:7px 4px; border:none; cursor:pointer; font-size:12px; font-weight:bold; font-family:inherit; transition: background .15s, color .15s;">
+                        📆 Несколько дней
+                    </button>
+                </div>
+
+                <!-- Режим: Один день — календарь навигации -->
+                <div id="sfh-single-content">
+                    <div id="sfh-cal"></div>
+                </div>
+
+                <!-- Режим: Несколько дней — выбор диапазона -->
+                <div id="sfh-multi-content" style="display:none;">
+                    <div style="margin-bottom:10px; padding:10px; border-radius:7px; background:${s.rangeBg}; border:1px solid ${s.inputBorder};">
+                        <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+                            <label style="font-size:12px; font-weight:bold; white-space:nowrap;">С:</label>
+                            <input type="date" id="sfh-date-from"
+                                style="flex:1; padding:6px; border:1px solid ${s.inputBorder}; border-radius:5px; font-size:12px; background:${s.inputBg}; color:${s.inputText}; font-family:inherit;">
+                        </div>
+                        <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+                            <label style="font-size:12px; font-weight:bold; white-space:nowrap;">По:</label>
+                            <input type="date" id="sfh-date-to"
+                                style="flex:1; padding:6px; border:1px solid ${s.inputBorder}; border-radius:5px; font-size:12px; background:${s.inputBg}; color:${s.inputText}; font-family:inherit;">
+                        </div>
+                        <div style="display:flex; gap:5px;">
+                            <button type="button" id="sfh-range-today" class="sfh-cal-day-btn" style="flex:1;">Сегодня</button>
+                            <button type="button" id="sfh-range-week" class="sfh-cal-day-btn" style="flex:1;">Неделя</button>
+                            <button type="button" id="sfh-range-month" class="sfh-cal-day-btn" style="flex:1;">Месяц</button>
+                        </div>
+                        <div id="sfh-range-info" style="margin-top:8px; font-size:11px; color:${s.placeholder}; text-align:center;"></div>
+                    </div>
+                </div>
+
+                <!-- Общие поля -->
                 <div style="margin-bottom: 10px;">
                     <label style="display: block; margin-bottom: 4px; font-weight: bold; font-size: 12px;">Студенты:</label>
-                    <input type="text" id="sfh-students" placeholder="1,3,5 или 1-10 или all"
+                    <input type="text" id="sfh-students" placeholder="0, 1,3,5 или 1-10"
                         style="width: 100%; padding: 7px; border: 1px solid ${s.inputBorder}; border-radius: 5px; font-size: 13px; background: ${s.inputBg}; color: ${s.inputText};">
-                    <small style="color: ${s.placeholder}; font-size: 11px;">Примеры: <code>all</code>, <code>1-5</code>, <code>1,3,7</code></small>
+                    <small style="color: ${s.placeholder}; font-size: 11px;">Примеры: <code>0</code> = все, <code>1-5</code>, <code>1,3,7</code></small>
                 </div>
                 <div style="margin-bottom: 10px;">
                     <label style="display: block; margin-bottom: 4px; font-weight: bold; font-size: 12px;">Пары/часы:</label>
-                    <input type="text" id="sfh-pairs" placeholder="1 или 1.1 или 1-4"
+                    <input type="text" id="sfh-pairs" placeholder="0 или 1 или 1.1 или 1-4"
                         style="width: 100%; padding: 7px; border: 1px solid ${s.inputBorder}; border-radius: 5px; font-size: 13px; background: ${s.inputBg}; color: ${s.inputText};">
-                    <small style="color: ${s.placeholder}; font-size: 11px;"><code>1.1</code> = 1 пара, 1 час; <code>1-4</code> = все пары 1–4</small>
+                    <small style="color: ${s.placeholder}; font-size: 11px;"><code>0</code> = все пары; <code>1.1</code> = 1 пара, 1 час; <code>1-4</code> = пары 1–4</small>
                 </div>
                 <div style="margin-bottom: 10px;">
                     <label style="display: block; margin-bottom: 4px; font-weight: bold; font-size: 12px;">Причина:</label>
@@ -364,9 +416,6 @@
             anchorPanelNextToTable();
         }
 
-        buildCalendar(document.getElementById('sfh-cal'), s, theme);
-        updateSkipCounter();
-
         // === Динамические стили ===
         let style = document.createElement('style');
         style.id = 'sfh-theme-style';
@@ -378,7 +427,8 @@
             #sfh-status.success { background: ${s.statusSuccessBg}; color: ${theme === 'dark' ? '#a5d6a7' : '#2e7d32'}; }
             #sfh-status.error { background: ${s.statusErrorBg}; color: ${theme === 'dark' ? '#ef9a9a' : '#c62828'}; }
             #sfh-result { background: ${s.resultBg}; color: ${s.resultText}; }
-            #sfh-students:focus, #sfh-pairs:focus, #sfh-reason:focus {
+            #sfh-students:focus, #sfh-pairs:focus, #sfh-reason:focus,
+            #sfh-date-from:focus, #sfh-date-to:focus {
                 outline: 2px solid ${theme === 'dark' ? '#4CAF50' : '#2E7D32'};
                 border-color: transparent;
             }
@@ -396,12 +446,25 @@
             .sfh-cal-foot { display:flex; gap:5px; margin-top:8px; }
             .sfh-cal-day-btn { flex:1; border:1px solid ${s.inputBorder}; background:${s.inputBg}; color:${s.inputText}; font-size:11px; font-weight:bold; padding:6px 4px; border-radius:6px; cursor:pointer; white-space:nowrap; font-family:inherit; }
             .sfh-cal-day-btn:hover { border-color:${theme === 'dark' ? '#4CAF50' : '#2E7D32'}; }
+            /* Стили вкладок */
+            .sfh-tab { background:${s.tabBg}; color:${s.text}; }
+            .sfh-tab:hover { background:${s.tabHoverBg}; }
+            .sfh-tab.active { background:${s.tabActiveBg}; color:${s.tabActiveColor}; }
             @media print { #sfh-panel { display: none !important; } }
             @media (max-width: 700px) {
                 #sfh-panel { width: calc(100vw - 24px) !important; left: 12px !important; }
             }
         `;
         document.head.appendChild(style);
+
+        // === Календарь (режим «Один день») ===
+        buildCalendar(document.getElementById('sfh-cal'), s, theme);
+
+        // === Диапазон дат (режим «Несколько дней») ===
+        initRangeDatePicker(s, theme);
+        switchMode(currentMode);
+
+        updateSkipCounter();
 
         // === Восстановление сохранённого ввода ===
         const inpStudents = document.getElementById('sfh-students');
@@ -435,11 +498,199 @@
             localStorage.setItem(LS_COLLAPSED, String(!isHidden));
         };
 
-        // === Обработчики ===
+        // === Переключение вкладок ===
+        document.querySelectorAll('.sfh-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const mode = tab.dataset.mode;
+                localStorage.setItem(LS_MODE, mode);
+                switchMode(mode);
+            });
+        });
+
+        // === Обработчики кнопок ===
         document.getElementById('sfh-mark-btn').onclick = handleMarkAbsences;
         document.getElementById('sfh-remove-btn').onclick = handleRemoveAbsences;
         document.getElementById('sfh-stop-btn').onclick = () => { state.cancel = true; };
         document.getElementById('sfh-reload-cancel').onclick = () => { state.cancelReload = true; };
+    }
+
+    // === ПЕРЕКЛЮЧЕНИЕ РЕЖИМОВ ===
+    function switchMode(mode) {
+        document.querySelectorAll('.sfh-tab').forEach(t => {
+            t.classList.toggle('active', t.dataset.mode === mode);
+        });
+        const singleContent = document.getElementById('sfh-single-content');
+        const multiContent = document.getElementById('sfh-multi-content');
+        if (singleContent) singleContent.style.display = mode === 'single' ? 'block' : 'none';
+        if (multiContent) multiContent.style.display = mode === 'multi' ? 'block' : 'none';
+    }
+
+    function getCurrentMode() {
+        return localStorage.getItem(LS_MODE) || 'single';
+    }
+
+    // === ДИАПАЗОН ДАТ (режим «Несколько дней») ===
+    function initRangeDatePicker(s, theme) {
+        const dateFrom = document.getElementById('sfh-date-from');
+        const dateTo = document.getElementById('sfh-date-to');
+        const infoEl = document.getElementById('sfh-range-info');
+        if (!dateFrom || !dateTo) return;
+
+        // Восстановление сохранённых дат
+        let savedRange = {};
+        try { savedRange = JSON.parse(localStorage.getItem(LS_RANGE_DATES) || '{}'); } catch (e) { }
+
+        const today = new Date();
+        const fmt = (d) => d.toISOString().slice(0, 10);
+        const todayStr = fmt(today);
+
+        dateFrom.value = savedRange.from || todayStr;
+        dateTo.value = savedRange.to || todayStr;
+
+        const saveRange = () => {
+            localStorage.setItem(LS_RANGE_DATES, JSON.stringify({
+                from: dateFrom.value,
+                to: dateTo.value
+            }));
+            updateRangeInfo(dateFrom.value, dateTo.value, infoEl);
+        };
+
+        dateFrom.addEventListener('change', () => {
+            if (dateFrom.value > dateTo.value) dateTo.value = dateFrom.value;
+            saveRange();
+        });
+        dateTo.addEventListener('change', () => {
+            if (dateTo.value < dateFrom.value) dateFrom.value = dateTo.value;
+            saveRange();
+        });
+
+        // Быстрые кнопки
+        document.getElementById('sfh-range-today').addEventListener('click', () => {
+            dateFrom.value = todayStr;
+            dateTo.value = todayStr;
+            saveRange();
+        });
+        document.getElementById('sfh-range-week').addEventListener('click', () => {
+            const monday = new Date(today);
+            const dayOfWeek = monday.getDay();
+            const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+            monday.setDate(monday.getDate() + diff);
+            const sunday = new Date(monday);
+            sunday.setDate(sunday.getDate() + 6);
+            dateFrom.value = fmt(monday);
+            dateTo.value = fmt(sunday);
+            saveRange();
+        });
+        document.getElementById('sfh-range-month').addEventListener('click', () => {
+            const first = new Date(today.getFullYear(), today.getMonth(), 1);
+            const last = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+            dateFrom.value = fmt(first);
+            dateTo.value = fmt(last);
+            saveRange();
+        });
+
+        updateRangeInfo(dateFrom.value, dateTo.value, infoEl);
+    }
+
+    function updateRangeInfo(fromStr, toStr, infoEl) {
+        if (!fromStr || !toStr || !infoEl) return;
+        const from = new Date(fromStr);
+        const to = new Date(toStr);
+        const diffMs = to - from;
+        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1;
+        if (diffDays <= 0) {
+            infoEl.textContent = '';
+        } else {
+            const fromRu = from.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+            const toRu = to.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+            infoEl.textContent = `${fromRu} — ${toRu} (${diffDays} дн.)`;
+        }
+    }
+
+    // === ПАРСИНГ СТУДЕНТОВ ИЗ HTML-ДОКУМЕНТА ===
+    function parseStudentsFromDoc(doc) {
+        const students = [];
+        const rows = doc.querySelectorAll('table.table-prog tbody tr');
+        rows.forEach((row, idx) => {
+            const cols = row.querySelectorAll('td');
+            if (cols.length < 3) return;
+            const fio = cols[1].textContent.trim();
+            const hours = [];
+            for (let i = 2; i < cols.length; i++) {
+                const cell = cols[i];
+                const nb = cell.getAttribute('data-nb');
+                if (nb) {
+                    try {
+                        const h = JSON.parse(nb);
+                        h.alreadyNb = cell.hasAttribute('data-params');
+                        hours.push(h);
+                    } catch (e) { }
+                }
+            }
+            students.push({ idx: idx + 1, fio, hours });
+        });
+        return students;
+    }
+
+    // === ЗАГРУЗКА СТРАНИЦЫ ДНЯ ЧЕРЕЗ GM_xmlhttpRequest ===
+    function fetchDayPage(date) {
+        const url = new URL(location.href);
+        url.searchParams.set('m', String(date.getMonth() + 1));
+        url.searchParams.set('d', String(date.getDate()));
+        const pageUrl = url.toString();
+
+        return new Promise((resolve) => {
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: pageUrl,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                onload: (response) => {
+                    if (response.status !== 200) return resolve(null);
+                    try {
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(response.responseText, 'text/html');
+                        resolve(doc);
+                    } catch (e) {
+                        resolve(null);
+                    }
+                },
+                onerror: () => resolve(null)
+            });
+        });
+    }
+
+    // === ГЕНЕРАЦИЯ СПИСКА ДАТ В ДИАПАЗОНЕ ===
+    function generateDateRange(fromStr, toStr) {
+        const dates = [];
+        const from = new Date(fromStr);
+        const to = new Date(toStr);
+        from.setHours(0, 0, 0, 0);
+        to.setHours(0, 0, 0, 0);
+        const cur = new Date(from);
+        while (cur <= to) {
+            dates.push(new Date(cur));
+            cur.setDate(cur.getDate() + 1);
+        }
+        return dates;
+    }
+
+    // === ПОСТРОЕНИЕ URL ДЛЯ КОНКРЕТНОГО ДНЯ ===
+    function buildDayUrl(date) {
+        const url = new URL(location.href);
+        url.searchParams.set('m', String(date.getMonth() + 1));
+        url.searchParams.set('d', String(date.getDate()));
+        return url.toString().split('#')[0];
+    }
+
+    // === МАССОВАЯ ОБРАБОТКА ПРОГУЛОВ (ОДИН ДЕНЬ) ===
+    async function handleMarkAbsences() {
+        if (getCurrentMode() === 'multi') return markOrRemoveMultiDay('mark');
+        return markOrRemoveAbsences('mark');
+    }
+
+    async function handleRemoveAbsences() {
+        if (getCurrentMode() === 'multi') return markOrRemoveMultiDay('remove');
+        return markOrRemoveAbsences('remove');
     }
 
     function showStatus(msg, type) {
@@ -457,7 +708,7 @@
         if (!input.trim()) return { sel, bad };
         const parts = input.replace(/[,;]/g, ' ').split(/\s+/).filter(x => x);
         for (const p of parts) {
-            if (p === 'all' || p === 'все' || p === '*') {
+            if (p === 'all' || p === 'все' || p === '*' || p === '0') {
                 for (let i = 1; i <= maxItems; i++) sel.add(i);
             } else if (p.includes('-')) {
                 const [a, b] = p.split('-').map(Number);
@@ -482,28 +733,7 @@
     }
 
     function parseStudents() {
-        const students = [];
-        const rows = document.querySelectorAll('table.table-prog tbody tr');
-        rows.forEach((row, idx) => {
-            const cols = row.querySelectorAll('td');
-            if (cols.length < 3) return;
-            const fio = cols[1].textContent.trim();
-            const hours = [];
-            for (let i = 2; i < cols.length; i++) {
-                const cell = cols[i];
-                const nb = cell.getAttribute('data-nb');
-                if (nb) {
-                    try {
-                        const h = JSON.parse(nb);
-                        h.alreadyNb = cell.hasAttribute('data-params');
-                        h.cell = cell;
-                        hours.push(h);
-                    } catch (e) { }
-                }
-            }
-            students.push({ idx: idx + 1, fio, hours });
-        });
-        return students;
+        return parseStudentsFromDoc(document);
     }
 
     function groupHoursByPair(hours) {
@@ -596,9 +826,6 @@
         return ok;
     }
 
-    async function handleMarkAbsences() { await markOrRemoveAbsences('mark'); }
-    async function handleRemoveAbsences() { await markOrRemoveAbsences('remove'); }
-
     async function markOrRemoveAbsences(action) {
         if (state.running) return;
 
@@ -630,9 +857,8 @@
             const pairs = groupHoursByPair(s.hours);
             const { sel: pairSel, bad: badPairs } = parseSelection(inpPairs.value, pairs.length, false);
             const hours = getSelectedHours(pairs, pairSel);
-            // mark: пропускаем уже отмеченные; remove: только отмеченные
+            // remove: пропускаем неотмеченные; mark: обрабатываем все (в т.ч. уже отмеченные — обновит причину)
             for (const h of hours) {
-                if (action === 'mark' && h.alreadyNb) { skippedState++; continue; }
                 if (action === 'remove' && !h.alreadyNb) { skippedState++; continue; }
                 tasks.push({ student: s.fio, hour: h, idx: s.idx });
             }
@@ -723,6 +949,172 @@
             pairs: document.getElementById('sfh-pairs').value,
             reason: document.getElementById('sfh-reason').value
         }));
+    }
+
+    // === МАССОВАЯ ОБРАБОТКА ПРОГУЛОВ (НЕСКОЛЬКО ДНЕЙ) ===
+    async function markOrRemoveMultiDay(action) {
+        if (state.running) return;
+
+        const inpStudents = document.getElementById('sfh-students');
+        const inpPairs = document.getElementById('sfh-pairs');
+        const reason = document.getElementById('sfh-reason').value;
+
+        saveLastInputs();
+
+        const dateFrom = document.getElementById('sfh-date-from').value;
+        const dateTo = document.getElementById('sfh-date-to').value;
+
+        if (!dateFrom || !dateTo) {
+            return showStatus('❌ Укажите диапазон дат', 'error');
+        }
+
+        const dates = generateDateRange(dateFrom, dateTo);
+        if (!dates.length) {
+            return showStatus('❌ Нет дней для обработки', 'error');
+        }
+
+        if (dates.length > 31) {
+            return showStatus('❌ Слишком большой диапазон (макс. 31 день)', 'error');
+        }
+
+        state.running = true;
+        state.cancel = false;
+        state.cancelReload = false;
+
+        const btnMark = document.getElementById('sfh-mark-btn');
+        const btnRemove = document.getElementById('sfh-remove-btn');
+        const btnStop = document.getElementById('sfh-stop-btn');
+        const resultEl = document.getElementById('sfh-result');
+        const reloadEl = document.getElementById('sfh-reload');
+        btnMark.disabled = true;
+        btnRemove.disabled = true;
+        btnStop.style.display = 'block';
+        resultEl.style.display = 'none';
+        reloadEl.style.display = 'none';
+
+        let totalDone = 0;
+        let totalOk = 0;
+        let totalFailures = 0;
+        const affectedStudents = new Set();
+        const dayResults = [];
+
+        for (const date of dates) {
+            if (state.cancel) break;
+
+            const dateStr = date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+            showStatus(`📅 Загрузка ${dateStr}… (${dates.indexOf(date) + 1}/${dates.length})`, 'info');
+
+            const dayDoc = await fetchDayPage(date);
+            if (!dayDoc) {
+                dayResults.push({ date: dateStr, ok: 0, failures: 0, skipped: 0, error: true });
+                continue;
+            }
+
+            const allStuds = parseStudentsFromDoc(dayDoc);
+            if (!allStuds.length) {
+                dayResults.push({ date: dateStr, ok: 0, failures: 0, skipped: 0, error: false, noStudents: true });
+                continue;
+            }
+
+            const { sel: studSel, bad: badStudents } = parseSelection(inpStudents.value, allStuds.length, true);
+            if (!studSel.size) {
+                dayResults.push({ date: dateStr, ok: 0, failures: 0, skipped: 0, error: false, noMatch: true });
+                continue;
+            }
+
+            const selected = allStuds.filter(s => Array.from(studSel).some(x => typeof x === 'number' && x === s.idx));
+            if (!selected.length) {
+                dayResults.push({ date: dateStr, ok: 0, failures: 0, skipped: 0, error: false, noMatch: true });
+                continue;
+            }
+
+            const tasks = [];
+            let skippedState = 0;
+            const dayUrl = buildDayUrl(date);
+
+            for (const s of selected) {
+                const pairs = groupHoursByPair(s.hours);
+                const { sel: pairSel } = parseSelection(inpPairs.value, pairs.length, false);
+                const hours = getSelectedHours(pairs, pairSel);
+                for (const h of hours) {
+                    if (action === 'remove' && !h.alreadyNb) { skippedState++; continue; }
+                    tasks.push({ student: s.fio, hour: h, idx: s.idx });
+                }
+            }
+
+            let dayOk = 0;
+            let dayFailures = 0;
+
+            for (const t of tasks) {
+                if (state.cancel) break;
+                const res = await sendMarkRetry(dayUrl, t.hour, reason, action);
+                totalDone++;
+                if (res) {
+                    dayOk++;
+                    totalOk++;
+                    affectedStudents.add(t.idx);
+                } else {
+                    dayFailures++;
+                    totalFailures++;
+                }
+                showStatus(`⏳ ${dateStr}: ${dayOk + dayFailures}/${tasks.length}`, 'info');
+                await sleep(80);
+            }
+
+            totalFailures += dayFailures;
+            dayResults.push({
+                date: dateStr,
+                ok: dayOk,
+                failures: dayFailures,
+                skipped: skippedState,
+                error: false
+            });
+
+            await sleep(100);
+        }
+
+        btnMark.disabled = false;
+        btnRemove.disabled = false;
+        btnStop.style.display = 'none';
+        state.running = false;
+
+        // Формируем итоговый отчёт
+        const parts = [];
+        parts.push(state.cancel
+            ? `⏹ Остановлено: ${totalOk}/${totalDone}`
+            : `✅ Готово! Успешно: ${totalOk}/${totalDone}`
+        );
+        if (totalFailures) parts.push(`сбоев: ${totalFailures}`);
+        showStatus(parts.join(' · '), totalFailures ? 'error' : 'success');
+
+        // Детальный отчёт по дням
+        if (dayResults.length > 1) {
+            const daySummary = dayResults
+                .filter(d => !d.error && !d.noStudents && !d.noMatch)
+                .map(d => `${d.date}: ${d.ok}`)
+                .join(', ');
+            if (daySummary) {
+                resultEl.textContent = `📅 По дням: ${daySummary}`;
+                resultEl.style.display = 'block';
+            }
+        } else if (affectedStudents.size) {
+            resultEl.textContent = `${action === 'mark' ? '✅ Отмечено' : '🗑 Удалено'} у студентов: ${affectedStudents.size}`;
+            resultEl.style.display = 'block';
+        }
+
+        // Автообновление
+        const autoreload = localStorage.getItem(LS_AUTORELOAD) !== 'false';
+        if (totalOk > 0 && autoreload && !state.cancel) {
+            let n = 3;
+            reloadEl.style.display = 'block';
+            const tick = () => {
+                if (state.cancelReload) { reloadEl.style.display = 'none'; return; }
+                if (n <= 0) { location.reload(); return; }
+                document.getElementById('sfh-reload-num').textContent = n--;
+                setTimeout(tick, 1000);
+            };
+            tick();
+        }
     }
 
     // === ЗАПУСК ===
